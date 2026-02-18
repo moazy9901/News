@@ -16,15 +16,11 @@ class NewsService
                 'q' => 'bitcoin',
                 'apiKey' => config('services.newsapi.key'),
             ]);
-
             if (!$response->successful()) {
                 throw new \Exception('API request failed');
             }
-
             $articles = $response->json()['articles'] ?? [];
-
             foreach ($articles as $item) {
-
                 Article::updateOrCreate(
                     ['url' => $item['url']?? null],
                     [
@@ -39,7 +35,6 @@ class NewsService
                     ]
                 );
             }
-
         } catch (\Exception $e) {
             Log::error('News Fetch Error: ' . $e->getMessage());
             return response()->json(['error' => 'Failed to fetch news: ' . $e->getMessage()], 500);
