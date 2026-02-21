@@ -3,41 +3,57 @@
 namespace App\Services;
 
 use App\Models\Article;
-use Illuminate\Support\Facades\Http;
+use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Log;
 
 class NewsService
 {
     protected string $url = 'https://newsapi.org/v2/everything';
+    protected Client $client;
+    public function __construct()
+    {
+        $this->client = new Client([
+            'base_uri' => 'https://newsapi.org/',
+            'timeout'  => 10.0,
+        ]);
+    }
+
     public function fetchAndStore()
     {
         try {
-            $response = Http::get($this->url, [
-                'q' => 'bitcoin',
-                'apiKey' => config('services.newsapi.key'),
+            $response = $this->client->get('v2/everything', [
+                'query' => [
+                    'q' => 'bitcoin',
+                    'apiKey' => config('services.newsapi.key'),
+                ]
             ]);
-            if (!$response->successful()) {
+            if ($response->getStatusCode() !== 200) {
                 throw new \Exception('API request failed');
             }
-            $articles = $response->json()['articles'] ?? [];
+            $body = json_decode($response->getBody()->getContents(), true);
+            $articles = $body['articles'] ?? [];
             foreach ($articles as $item) {
+                if (empty($item['url'])) {
+                    continue;
+                }
                 Article::updateOrCreate(
-                    ['url' => $item['url']?? null],
+                    ['url' => $item['url']],
                     [
-                        'source_name'=>$item['source']['name']?? null,
-                        'author'=>$item['author']?? null,
-                        'title'=>$item['title']?? null,
-                        'description'=>$item['description']?? null,
-                        'url'=>$item['url']?? null,
-                        'image'=>$item['urlToImage']?? null,
-                        'published_at'=>$item['publishedAt']?? null,
-                        'content'=>$item['content']?? null,
+                        'source_name'  => $item['source']['name'] ?? null,
+                        'author'       => $item['author'] ?? null,
+                        'title'        => $item['title'] ?? null,
+                        'description'  => $item['description'] ?? null,
+                        'image'        => $item['urlToImage'] ?? null,
+                        'published_at' => $item['publishedAt'] ?? null,
+                        'content'      => $item['content'] ?? null,
                     ]
                 );
             }
+            return true;
+
         } catch (\Exception $e) {
             Log::error('News Fetch Error: ' . $e->getMessage());
-            return response()->json(['error' => 'Failed to fetch news: ' . $e->getMessage()], 500);
+            throw $e;
         }
     }
 }
